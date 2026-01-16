@@ -10,6 +10,7 @@ import io
 from datetime import datetime
 
 # --- 1. 환경 설정 ---
+# 클라우드타입 환경 변수가 있는지 확인합니다.
 IS_CLOUD_ENV = 'DB_HOST' in os.environ
 DB_FILE = "sinkbot_data.db"
 
@@ -35,6 +36,7 @@ def get_db_connection():
 def load_and_process(conn):
     """DB에서 데이터를 읽어와 AI 학습용 특징(Feature)을 추출합니다."""
     try:
+        # DB에서 전체 데이터 로드
         df = pd.read_sql_query("SELECT * FROM displacement ORDER BY device_id, timestamp", conn)
         
         if len(df) < 20:
@@ -47,8 +49,8 @@ def load_and_process(conn):
             # 기준점 설정 (각 장치의 첫 데이터)
             ref = group.iloc[0]
             
-            # 특징 추출 1: 수직 침하량 (Z축 변화)
-            group['delta_z'] = group['z'] - ref['z']
+            # 특징 추출 1: 수직 침하량 (Z축 변화의 절대값)
+            group['delta_z'] = abs(group['z'] - ref['z'])
             
             # 특징 추출 2: 3차원 변위 거리
             group['dist_3d'] = np.sqrt(
@@ -86,14 +88,14 @@ def main():
         model.fit(features)
         
         try:
-            # 모델을 바이너리로 변환
+            # 모델을 바이너리로 변환하여 DB에 저장 (파일 시스템 권한 문제 회피)
             buf = io.BytesIO()
             joblib.dump(model, buf)
             model_binary = buf.getvalue()
             
             cur = conn.cursor()
             if IS_CLOUD_ENV:
-                # PostgreSQL용 저장 (Upsert)
+                # PostgreSQL용 저장 (기존 모델이 있으면 덮어쓰기)
                 cur.execute("""
                     INSERT INTO ai_models (model_name, model_data) 
                     VALUES (%s, %s) 
@@ -101,7 +103,7 @@ def main():
                     DO UPDATE SET model_data = EXCLUDED.model_data, created_at = NOW();
                 """, ('sinkbot_model', model_binary))
             else:
-                # SQLite용 저장 (Upsert)
+                # 로컬 SQLite용 저장
                 cur.execute("""
                     INSERT OR REPLACE INTO ai_models (model_name, model_data, created_at) 
                     VALUES (?, ?, ?)
