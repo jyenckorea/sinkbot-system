@@ -1,0 +1,22 @@
+# 1. 웹 서버 및 데이터 수집
+
+Flask
+requests
+
+# 2. PostgreSQL 데이터베이스 연결
+
+psycopg2-binary
+
+# 3. 데이터 분석 및 AI 학습
+
+pandas
+numpy
+scikit-learn
+joblib
+
+# 4. 관제 대시보드 및 시각화
+
+streamlit
+streamlit-folium
+plotly
+folium
